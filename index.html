@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Code Visualizer — YeetCode</title>
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.25.1/full/pyodide.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #fef9c3;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* ── Header ────────────────────────────────────────────────────── */
+    header {
+      background: white;
+      border-bottom: 4px solid black;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+    header h1 { font-size: 1.4rem; font-weight: 900; }
+    .badge {
+      background: #facc15;
+      border: 2px solid black;
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 0.72rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+    header .hint {
+      margin-left: auto;
+      color: #9ca3af;
+      font-size: 0.78rem;
+    }
+
+    /* ── Main container ─────────────────────────────────────────────── */
+    main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+
+    /* ── Edit panel ─────────────────────────────────────────────────── */
+    #edit-panel {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-width: 860px;
+      width: 100%;
+      margin: 0 auto;
+    }
+    #edit-panel.hidden { display: none; }
+
+    .panel-card {
+      background: white;
+      border: 4px solid black;
+      border-radius: 14px;
+      box-shadow: 4px 4px 0 black;
+      overflow: hidden;
+    }
+    .panel-card-header {
+      background: black;
+      color: white;
+      padding: 8px 16px;
+      font-weight: 800;
+      font-size: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .panel-card-header .sub { opacity: 0.55; font-weight: 500; font-size: 0.78rem; }
+
+    .code-textarea {
+      width: 100%;
+      min-height: 280px;
+      padding: 16px;
+      font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.88rem;
+      line-height: 1.65;
+      border: none;
+      outline: none;
+      resize: vertical;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      tab-size: 4;
+    }
+    .input-textarea {
+      width: 100%;
+      min-height: 56px;
+      padding: 12px 16px;
+      font-family: monospace;
+      font-size: 0.88rem;
+      border: none;
+      outline: none;
+      resize: vertical;
+      background: #f9fafb;
+      color: #111;
+    }
+
+    #viz-btn {
+      padding: 15px;
+      background: #facc15;
+      color: black;
+      font-size: 1.05rem;
+      font-weight: 900;
+      border: 4px solid black;
+      border-radius: 12px;
+      cursor: pointer;
+      box-shadow: 4px 4px 0 black;
+      transition: transform 0.1s, box-shadow 0.1s;
+      letter-spacing: 0.02em;
+    }
+    #viz-btn:hover:not(:disabled) { transform: translate(-2px,-2px); box-shadow: 6px 6px 0 black; }
+    #viz-btn:active:not(:disabled) { transform: translate(2px,2px); box-shadow: 2px 2px 0 black; }
+    #viz-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; box-shadow: 4px 4px 0 black; }
+
+    .load-example-btn {
+      background: white;
+      border: 2px solid black;
+      border-radius: 8px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-left: auto;
+    }
+    .load-example-btn:hover { background: #f9fafb; }
+
+    /* ── Viz layout ──────────────────────────────────────────────────── */
+    #viz-layout {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+    #viz-layout.hidden { display: none; }
+
+    /* ── Code panel (left) ───────────────────────────────────────────── */
+    #code-panel {
+      width: 42%;
+      min-width: 300px;
+      background: #1e1e1e;
+      border-right: 4px solid black;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #code-panel-top {
+      background: #252526;
+      border-bottom: 2px solid #333;
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #code-panel-top .filename { color: #cccccc; font-size: 0.8rem; font-family: monospace; }
+    #step-event-label {
+      font-size: 0.78rem;
+      font-family: monospace;
+      color: #facc15;
+      font-weight: 700;
+    }
+
+    #code-lines { flex: 1; overflow-y: auto; padding: 6px 0; }
+
+    .code-line {
+      display: flex;
+      align-items: center;
+      padding: 0;
+      font-family: 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      white-space: pre;
+      cursor: default;
+    }
+    .code-line.active { background: #094771; }
+    .code-line.active .line-content { color: #ffffff; }
+    .code-line.was-active { background: #1f3a52; }
+
+    .line-gutter {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+      width: 52px;
+      padding-right: 6px;
+      justify-content: flex-end;
+      gap: 4px;
+    }
+    .line-num {
+      color: #4a4a4a;
+      font-size: 0.72rem;
+      min-width: 20px;
+      text-align: right;
+    }
+    .code-line.active .line-num { color: #facc15; }
+    .code-line.was-active .line-num { color: #6b9dbd; }
+    .line-arrow { color: #facc15; font-size: 0.65rem; width: 10px; }
+
+    .line-content { color: #9d9d9d; flex: 1; padding-right: 12px; }
+    .code-line.active .line-content { color: #fff; }
+
+    /* ── Step controls ───────────────────────────────────────────────── */
+    #step-controls {
+      flex-shrink: 0;
+      padding: 10px 12px;
+      background: #252526;
+      border-top: 2px solid #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ctrl-btn {
+      background: #3c3c3c;
+      color: #cccccc;
+      border: 2px solid #555;
+      border-radius: 7px;
+      padding: 5px 12px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.1s;
+      white-space: nowrap;
+    }
+    .ctrl-btn:hover:not(:disabled) { background: #4a4a4a; }
+    .ctrl-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .ctrl-btn.primary { background: #facc15; color: black; border-color: #ca8a04; }
+    .ctrl-btn.primary:hover:not(:disabled) { background: #fde047; }
+    .ctrl-btn.edit { background: #374151; color: white; border-color: #6b7280; }
+    .ctrl-btn.edit:hover { background: #4b5563; }
+
+    #step-counter {
+      flex: 1;
+      text-align: center;
+      color: #6b7280;
+      font-size: 0.78rem;
+      font-family: monospace;
+    }
+
+    /* ── Output section ──────────────────────────────────────────────── */
+    #output-section {
+      flex-shrink: 0;
+      background: #0d0d0d;
+      border-top: 2px solid #222;
+      max-height: 130px;
+      overflow-y: auto;
+    }
+    #output-label {
+      color: #4b5563;
+      font-size: 0.68rem;
+      font-weight: 700;
+      font-family: monospace;
+      padding: 5px 14px 0;
+      letter-spacing: 0.1em;
+    }
+    #output-text {
+      padding: 4px 14px 10px;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 0.8rem;
+      color: #4ade80;
+      white-space: pre-wrap;
+      word-break: break-all;
+      min-height: 24px;
+    }
+    #error-text {
+      padding: 6px 14px;
+      font-family: monospace;
+      font-size: 0.78rem;
+      color: #f87171;
+      white-space: pre-wrap;
+    }
+
+    /* ── Memory panel (right) ────────────────────────────────────────── */
+    #memory-panel {
+      flex: 1;
+      background: white;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #memory-header {
+      flex-shrink: 0;
+      background: #fef9c3;
+      border-bottom: 3px solid black;
+      padding: 9px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 900;
+      font-size: 0.9rem;
+    }
+    #memory-header .func-label {
+      margin-left: auto;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b7280;
+      font-family: monospace;
+      background: #f3f4f6;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      padding: 1px 7px;
+    }
+
+    #memory-inner {
+      flex: 1;
+      display: flex;
+      overflow: auto;
+      position: relative;
+    }
+
+    /* ── Stack section ───────────────────────────────────────────────── */
+    #stack-section {
+      width: 210px;
+      min-width: 210px;
+      flex-shrink: 0;
+      border-right: 3px solid #e5e7eb;
+      padding: 14px 12px;
+      overflow-y: auto;
+    }
+
+    .section-title {
+      font-size: 0.68rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #9ca3af;
+      padding-bottom: 8px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #e5e7eb;
+    }
+
+    .stack-frame {
+      border: 2.5px solid black;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 10px;
+    }
+    .frame-label {
+      background: black;
+      color: #facc15;
+      padding: 3px 9px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      font-family: monospace;
+    }
+
+    .stack-var {
+      display: flex;
+      align-items: center;
+      padding: 4px 8px;
+      gap: 5px;
+      border-bottom: 1px solid #f0f0f0;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 0.77rem;
+    }
+    .stack-var:last-child { border-bottom: none; }
+
+    .sv-name { color: #1d4ed8; font-weight: 700; min-width: 55px; overflow: hidden; text-overflow: ellipsis; }
+    .sv-eq { color: #9ca3af; }
+    .sv-val {
+      background: #fef9c3;
+      border: 1.5px solid #ca8a04;
+      border-radius: 4px;
+      padding: 1px 6px;
+      font-size: 0.74rem;
+      max-width: 90px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sv-val.t-str { background: #dcfce7; border-color: #16a34a; }
+    .sv-val.t-bool { background: #fce7f3; border-color: #db2777; }
+    .sv-val.t-none { background: #f3f4f6; border-color: #9ca3af; color: #6b7280; }
+
+    .sv-ref {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .ref-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #6366f1;
+      border: 2px solid #4338ca;
+      flex-shrink: 0;
+    }
+    .ref-arrow { color: #6366f1; font-size: 0.8rem; }
+
+    .empty-note {
+      color: #d1d5db;
+      font-size: 0.78rem;
+      font-style: italic;
+      text-align: center;
+      padding: 20px 8px;
+    }
+
+    /* ── Heap section ────────────────────────────────────────────────── */
+    #heap-section {
+      flex: 1;
+      padding: 14px 16px;
+      overflow-y: auto;
+    }
+
+    .heap-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .heap-obj {
+      display: inline-flex;
+      flex-direction: column;
+      border: 2.5px solid black;
+      border-radius: 8px;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .heap-obj-label {
+      background: #e0e7ff;
+      border-bottom: 2px solid black;
+      padding: 2px 9px;
+      font-size: 0.67rem;
+      font-weight: 700;
+      color: #3730a3;
+      font-family: monospace;
+      letter-spacing: 0.04em;
+    }
+    .heap-obj-label.t-dict { background: #d1fae5; color: #065f46; }
+    .heap-obj-label.t-set  { background: #fce7f3; color: #9d174d; }
+    .heap-obj-label.t-tuple { background: #fef3c7; color: #92400e; }
+
+    /* List / tuple cells */
+    .list-cells {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .list-cell {
+      border-right: 1.5px solid black;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 38px;
+    }
+    .list-cell:last-child { border-right: none; }
+    .cell-idx {
+      background: #f3f4f6;
+      border-bottom: 1px solid #d1d5db;
+      padding: 1px 5px;
+      font-size: 0.62rem;
+      color: #9ca3af;
+      font-family: monospace;
+      width: 100%;
+      text-align: center;
+    }
+    .cell-val {
+      padding: 4px 8px;
+      font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+
+    /* Dict rows */
+    .dict-rows { display: flex; flex-direction: column; }
+    .dict-row {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .dict-row:last-child { border-bottom: none; }
+    .dict-key {
+      background: #f9fafb;
+      border-right: 2px solid black;
+      padding: 4px 10px;
+      font-family: monospace;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: #374151;
+      min-width: 55px;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dict-val {
+      padding: 4px 10px;
+      font-family: monospace;
+      font-size: 0.76rem;
+      color: #1a1a1a;
+    }
+
+    /* Set cells */
+    .set-cells { display: flex; flex-wrap: wrap; padding: 4px 6px; gap: 4px; }
+    .set-cell {
+      background: #fce7f3;
+      border: 1.5px solid #db2777;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-family: monospace;
+      font-size: 0.76rem;
+      font-weight: 600;
+    }
+
+    /* Generic */
+    .obj-repr {
+      padding: 6px 10px;
+      font-family: monospace;
+      font-size: 0.76rem;
+      color: #374151;
+    }
+
+    .empty-obj {
+      padding: 5px 10px;
+      font-family: monospace;
+      font-size: 0.74rem;
+      color: #9ca3af;
+      font-style: italic;
+    }
+
+    /* ── SVG arrows ──────────────────────────────────────────────────── */
+    #arrows-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    /* ── Loading overlay ─────────────────────────────────────────────── */
+    #loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 999;
+    }
+    #loading-overlay.hidden { display: none; }
+    #loading-box {
+      background: white;
+      border: 4px solid black;
+      border-radius: 16px;
+      box-shadow: 6px 6px 0 black;
+      padding: 36px 52px;
+      text-align: center;
+    }
+    #loading-box .spin {
+      font-size: 2.2rem;
+      display: block;
+      margin-bottom: 12px;
+      animation: spin 1.2s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading-box p { font-weight: 800; font-size: 1rem; }
+    #loading-box small { color: #6b7280; font-size: 0.8rem; }
+    #loading-box.error p { color: #dc2626; }
+
+    /* ── Misc ────────────────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- Loading overlay -->
+<div id="loading-overlay">
+  <div id="loading-box">
+    <span class="spin">⚙️</span>
+    <p>Loading Python runtime…</p>
+    <small>One-time download, ~10 s on first load</small>
+  </div>
+</div>
+
+<!-- Header -->
+<header>
+  <h1>YeetCode</h1>
+  <span class="badge">Code Visualizer</span>
+  <span class="hint">Python 3 · real execution · step-by-step</span>
+</header>
+
+<main>
+
+  <!-- ── Edit panel ─────────────────────────────────────────────────── -->
+  <div id="edit-panel">
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span>🐍</span>
+        <span>Python Code</span>
+        <button class="load-example-btn" id="load-example-btn">Load example</button>
+      </div>
+      <textarea id="code-input" class="code-textarea" spellcheck="false"
+        placeholder="# Paste or type Python code here..."></textarea>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-card-header">
+        <span>⌨️</span>
+        <span>Standard Input</span>
+        <span class="sub">— one value per line, used by input()</span>
+      </div>
+      <textarea id="stdin-input" class="input-textarea" spellcheck="false"
+        placeholder="Leave empty if your code doesn't call input()"></textarea>
+    </div>
+
+    <button id="viz-btn" disabled>⚙️ Loading Python runtime…</button>
+  </div>
+
+  <!-- ── Viz layout ──────────────────────────────────────────────────── -->
+  <div id="viz-layout" class="hidden">
+
+    <!-- Code panel -->
+    <div id="code-panel">
+      <div id="code-panel-top">
+        <span class="filename">main.py</span>
+        <span id="step-event-label"></span>
+      </div>
+
+      <div id="code-lines"></div>
+
+      <div id="step-controls">
+        <button class="ctrl-btn edit" id="edit-btn">✏️ Edit</button>
+        <button class="ctrl-btn" id="prev-btn" disabled>← Prev</button>
+        <span id="step-counter"></span>
+        <button class="ctrl-btn primary" id="next-btn">Next →</button>
+        <button class="ctrl-btn" id="play-btn" title="Autoplay (Space)">▶</button>
+      </div>
+
+      <div id="output-section">
+        <div id="output-label">OUTPUT</div>
+        <pre id="output-text"></pre>
+        <pre id="error-text"></pre>
+      </div>
+    </div>
+
+    <!-- Memory panel -->
+    <div id="memory-panel">
+      <div id="memory-header">
+        <span>🧠</span>
+        <span>Memory</span>
+        <span id="func-label" class="func-label" style="display:none"></span>
+      </div>
+      <div id="memory-inner">
+        <div id="stack-section">
+          <div class="section-title">Variables</div>
+          <div id="stack-vars"></div>
+        </div>
+        <div id="heap-section">
+          <div class="section-title">Objects</div>
+          <div id="heap-objects" class="heap-grid"></div>
+        </div>
+        <svg id="arrows-svg">
+          <defs>
+            <marker id="arr" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+              <polygon points="0 0,8 3,0 6" fill="#6366f1"/>
+            </marker>
+          </defs>
+        </svg>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let pyodide   = null;
+let trace     = [];
+let step      = 0;
+let playTimer = null;
+
+// ── Default example ──────────────────────────────────────────────────────────
+const EXAMPLE = `# Two Sum — Hash Map approach
+def two_sum(nums, target):
+    seen = {}
+    for i in range(len(nums)):
+        comp = target - nums[i]
+        if comp in seen:
+            return [seen[comp], i]
+        seen[nums[i]] = i
+    return []
+
+nums   = [2, 7, 11, 15]
+target = 9
+result = two_sum(nums, target)
+print("Indices:", result)
+`;
+
+// ── Python tracer (injected via Pyodide globals) ──────────────────────────────
+const TRACER = `
+import sys, io, json
+
+_buf    = io.StringIO()
+_idxref = [0]
+_ins    = [l for l in _stdin.split('\\n')] if _stdin.strip() else []
+_trace  = []
+MAX     = 600
+
+def _inp(prompt=''):
+    val = _ins[_idxref[0]] if _idxref[0] < len(_ins) else ''
+    _idxref[0] += 1
+    _buf.write(str(prompt) + str(val) + '\\n')
+    return str(val)
+
+_PRIM = (bool, int, float, str, type(None))
+
+def _ser(v, d=0):
+    if d > 2:
+        return {'t': type(v).__name__, 'r': '…', 'id': id(v), 'p': True}
+    t  = type(v).__name__
+    ip = isinstance(v, _PRIM)
+    o  = {'t': t, 'r': repr(v), 'id': id(v), 'p': ip}
+    if isinstance(v, bool):   o['t'] = 'bool'
+    elif isinstance(v, (list, tuple)):
+        o['items'] = [_ser(x, d+1) for x in v[:40]]
+    elif isinstance(v, dict):
+        o['items'] = [[repr(k), _ser(vv, d+1)] for k,vv in list(v.items())[:30]]
+    elif isinstance(v, set):
+        o['items'] = [_ser(x, d+1) for x in sorted(v, key=str)[:30]]
+    elif not ip:
+        try:
+            o['attrs'] = {k2: _ser(v2, d+1) for k2,v2 in list(vars(v).items())[:8]
+                          if not k2.startswith('_')}
+        except: pass
+    return o
+
+def _snap(frame):
+    out = {}
+    for k,v in frame.f_locals.items():
+        if k.startswith('_'): continue
+        try:    out[k] = _ser(v)
+        except: out[k] = {'t':'error','r':'?','id':0,'p':True}
+    return out
+
+def _tr(frame, event, arg):
+    if frame.f_code.co_filename != '<string>': return _tr
+    if len(_trace) >= MAX: return None
+    if event == 'line':
+        _trace.append({'ln': frame.f_lineno, 'ev': 'line',
+                        'fn': frame.f_code.co_name,
+                        'lc': _snap(frame), 'out': _buf.getvalue()})
+    elif event == 'return':
+        _trace.append({'ln': frame.f_lineno, 'ev': 'return',
+                        'fn': frame.f_code.co_name,
+                        'rv': _ser(arg) if arg is not None else None,
+                        'lc': _snap(frame), 'out': _buf.getvalue()})
+    return _tr
+
+sys.settrace(_tr)
+sys.stdout = _buf
+_err = None
+try:
+    exec(_code, {'input': _inp, '__name__': '__main__'})
+except Exception as e:
+    _err = type(e).__name__ + ': ' + str(e)
+finally:
+    sys.settrace(None)
+    sys.stdout = sys.__stdout__
+
+json.dumps({'trace': _trace, 'error': _err, 'out': _buf.getvalue()})
+`;
+
+// ── Init Pyodide ─────────────────────────────────────────────────────────────
+async function initPy() {
+  try {
+    pyodide = await loadPyodide();
+    hide('loading-overlay');
+    const btn = $('viz-btn');
+    btn.disabled = false;
+    btn.textContent = '▶  Visualize Code';
+  } catch (e) {
+    const box = document.querySelector('#loading-box');
+    box.classList.add('error');
+    box.innerHTML = `<p>Failed to load Python runtime</p><small>${e.message}</small>`;
+  }
+}
+
+// ── Run visualization ─────────────────────────────────────────────────────────
+async function runViz() {
+  const code  = $('code-input').value.trim();
+  if (!code) return;
+  stopPlay();
+
+  const btn = $('viz-btn');
+  btn.disabled = true;
+  btn.textContent = '⚙️ Running…';
+
+  try {
+    pyodide.globals.set('_code',  code);
+    pyodide.globals.set('_stdin', $('stdin-input').value || '');
+
+    const raw    = await pyodide.runPythonAsync(TRACER);
+    const result = JSON.parse(raw);
+
+    trace = result.trace || [];
+    if (!trace.length) { alert('Nothing to trace — check your code.'); return; }
+
+    buildCodeLines(code);
+    show('viz-layout');
+    hide('edit-panel');
+
+    step = 0;
+    renderStep(0);
+
+    const errEl = $('error-text');
+    errEl.textContent = result.error ? '⚠ ' + result.error : '';
+
+  } catch (e) {
+    alert('Runtime error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶  Visualize Code';
+  }
+}
+
+// ── Build code line elements ──────────────────────────────────────────────────
+function buildCodeLines(code) {
+  const container = $('code-lines');
+  container.innerHTML = '';
+  code.split('\n').forEach((line, i) => {
+    const div = document.createElement('div');
+    div.className = 'code-line';
+    div.dataset.ln = i + 1;
+    div.innerHTML =
+      `<span class="line-gutter">` +
+        `<span class="line-num">${i+1}</span>` +
+        `<span class="line-arrow"></span>` +
+      `</span>` +
+      `<span class="line-content">${esc(line) || ' '}</span>`;
+    container.appendChild(div);
+  });
+}
+
+// ── Render a single step ──────────────────────────────────────────────────────
+function renderStep(idx) {
+  if (!trace.length) return;
+  idx = Math.max(0, Math.min(idx, trace.length - 1));
+  step = idx;
+  const s     = trace[idx];
+  const total = trace.length;
+
+  // Highlight code lines
+  document.querySelectorAll('.code-line').forEach(el => {
+    el.classList.remove('active', 'was-active');
+    el.querySelector('.line-arrow').textContent = '';
+  });
+  const active = document.querySelector(`.code-line[data-ln="${s.ln}"]`);
+  if (active) {
+    active.classList.add('active');
+    active.querySelector('.line-arrow').textContent = '▶';
+    active.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+  // Dim previously-active line (one step behind)
+  if (idx > 0) {
+    const prev = document.querySelector(`.code-line[data-ln="${trace[idx-1].ln}"]`);
+    if (prev && prev !== active) prev.classList.add('was-active');
+  }
+
+  // Step event label
+  let evLabel = `line ${s.ln}`;
+  if (s.ev === 'return') evLabel = `↩ return from ${s.fn}()`;
+  else if (s.fn && s.fn !== '<module>') evLabel = `line ${s.ln}  ·  ${s.fn}()`;
+  $('step-event-label').textContent = evLabel;
+
+  // Step counter
+  $('step-counter').textContent = `${idx + 1} / ${total}`;
+
+  // Buttons
+  $('prev-btn').disabled = idx === 0;
+  $('next-btn').disabled = idx === total - 1;
+
+  // Output
+  $('output-text').textContent = s.out || '';
+
+  // Function label
+  const fl = $('func-label');
+  if (s.fn && s.fn !== '<module>') {
+    fl.textContent = `in ${s.fn}()`;
+    fl.style.display = '';
+  } else {
+    fl.style.display = 'none';
+  }
+
+  // Return value annotation
+  if (s.ev === 'return' && s.rv !== undefined && s.rv !== null) {
+    $('step-event-label').textContent += `  →  ${s.rv.r}`;
+  }
+
+  renderMemory(s.lc || {}, s.fn || '<module>');
+}
+
+// ── Render memory panel ───────────────────────────────────────────────────────
+function renderMemory(locals, funcName) {
+  const stackEl = $('stack-vars');
+  const heapEl  = $('heap-objects');
+  stackEl.innerHTML = '';
+  heapEl.innerHTML  = '';
+
+  if (!Object.keys(locals).length) {
+    stackEl.innerHTML = '<div class="empty-note">No variables yet</div>';
+    clearArrows();
+    return;
+  }
+
+  // Split primitives vs objects
+  const prims = {}, refs = {};
+  const heapById = {};
+
+  for (const [name, val] of Object.entries(locals)) {
+    if (val.p) {
+      prims[name] = val;
+    } else {
+      refs[name] = val;
+      if (!heapById[val.id]) heapById[val.id] = { obj: val, names: [] };
+      heapById[val.id].names.push(name);
+    }
+  }
+
+  // Stack frame
+  const frame = document.createElement('div');
+  frame.className = 'stack-frame';
+  const frameLabel = document.createElement('div');
+  frameLabel.className = 'frame-label';
+  frameLabel.textContent = funcName === '<module>' ? 'global' : funcName;
+  frame.appendChild(frameLabel);
+
+  // Primitives
+  for (const [name, val] of Object.entries(prims)) {
+    const row = el('div', 'stack-var');
+    const cls = val.t === 'str' ? 'sv-val t-str'
+              : val.t === 'bool' ? 'sv-val t-bool'
+              : val.t === 'NoneType' ? 'sv-val t-none'
+              : 'sv-val';
+    row.innerHTML =
+      `<span class="sv-name">${esc(name)}</span>` +
+      `<span class="sv-eq">=</span>` +
+      `<span class="${cls}" title="${esc(val.r)}">${esc(val.r)}</span>`;
+    frame.appendChild(row);
+  }
+
+  // Object references
+  for (const [name, val] of Object.entries(refs)) {
+    const row = el('div', 'stack-var');
+    row.innerHTML =
+      `<span class="sv-name">${esc(name)}</span>` +
+      `<span class="sv-eq">=</span>` +
+      `<span class="sv-ref">` +
+        `<span class="ref-dot" data-ref="${val.id}"></span>` +
+        `<span class="ref-arrow">→</span>` +
+      `</span>`;
+    frame.appendChild(row);
+  }
+
+  stackEl.appendChild(frame);
+
+  // Heap objects
+  if (!Object.keys(heapById).length) {
+    heapEl.innerHTML = '<div class="empty-note">No objects</div>';
+  } else {
+    for (const [id, { obj }] of Object.entries(heapById)) {
+      heapEl.appendChild(buildHeapObj(obj, id));
+    }
+  }
+
+  requestAnimationFrame(drawArrows);
+}
+
+// ── Build a heap object box ───────────────────────────────────────────────────
+function buildHeapObj(val, id) {
+  const box = el('div', 'heap-obj');
+  box.dataset.obj = id;
+
+  const lbl = el('div', 'heap-obj-label');
+  const t = val.t;
+  if (t === 'dict')  lbl.classList.add('t-dict');
+  if (t === 'set')   lbl.classList.add('t-set');
+  if (t === 'tuple') lbl.classList.add('t-tuple');
+  lbl.textContent = t;
+  box.appendChild(lbl);
+
+  if (t === 'list' || t === 'tuple') {
+    if (!val.items?.length) {
+      box.appendChild(emptyEl('empty'));
+    } else {
+      const cells = el('div', 'list-cells');
+      val.items.forEach((item, i) => {
+        const cell = el('div', 'list-cell');
+        cell.innerHTML = `<div class="cell-idx">${i}</div><div class="cell-val">${esc(item.r)}</div>`;
+        cells.appendChild(cell);
+      });
+      box.appendChild(cells);
+    }
+
+  } else if (t === 'dict') {
+    if (!val.items?.length) {
+      box.appendChild(emptyEl('{}'));
+    } else {
+      const rows = el('div', 'dict-rows');
+      val.items.forEach(([key, v]) => {
+        const row = el('div', 'dict-row');
+        row.innerHTML = `<div class="dict-key" title="${esc(key)}">${esc(key)}</div><div class="dict-val">${esc(v.r)}</div>`;
+        rows.appendChild(row);
+      });
+      box.appendChild(rows);
+    }
+
+  } else if (t === 'set') {
+    if (!val.items?.length) {
+      box.appendChild(emptyEl('set()'));
+    } else {
+      const cells = el('div', 'set-cells');
+      val.items.forEach(item => {
+        const c = el('div', 'set-cell');
+        c.textContent = item.r;
+        cells.appendChild(c);
+      });
+      box.appendChild(cells);
+    }
+
+  } else {
+    const p = el('div', 'obj-repr');
+    p.textContent = val.r;
+    box.appendChild(p);
+  }
+
+  return box;
+}
+
+function emptyEl(text) {
+  const d = el('div', 'empty-obj');
+  d.textContent = text;
+  return d;
+}
+
+// ── Draw SVG arrows from ref-dots to heap boxes ───────────────────────────────
+function clearArrows() {
+  const svg = $('arrows-svg');
+  Array.from(svg.children).forEach(c => { if (c.tagName !== 'defs') c.remove(); });
+}
+
+function drawArrows() {
+  const mi  = $('memory-inner');
+  const svg = $('arrows-svg');
+  clearArrows();
+
+  svg.setAttribute('width',  mi.scrollWidth);
+  svg.setAttribute('height', mi.scrollHeight);
+
+  const miRect = mi.getBoundingClientRect();
+
+  // Map obj-id -> left-center of heap box
+  const heapPos = {};
+  mi.querySelectorAll('[data-obj]').forEach(el => {
+    const r = el.getBoundingClientRect();
+    heapPos[el.dataset.obj] = {
+      x: r.left - miRect.left + mi.scrollLeft,
+      y: r.top  - miRect.top  + mi.scrollTop + r.height / 2,
+    };
+  });
+
+  mi.querySelectorAll('[data-ref]').forEach(dot => {
+    const id = dot.dataset.ref;
+    if (!heapPos[id]) return;
+    const r  = dot.getBoundingClientRect();
+    const x1 = r.right  - miRect.left + mi.scrollLeft;
+    const y1 = r.top    - miRect.top  + mi.scrollTop + r.height / 2;
+    const x2 = heapPos[id].x;
+    const y2 = heapPos[id].y;
+
+    const dx = Math.max(30, Math.abs(x2 - x1) * 0.45);
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', `M ${x1} ${y1} C ${x1+dx} ${y1}, ${x2-dx} ${y2}, ${x2} ${y2}`);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', '#6366f1');
+    path.setAttribute('stroke-width', '2');
+    path.setAttribute('marker-end', 'url(#arr)');
+    svg.appendChild(path);
+  });
+}
+
+// ── Autoplay ──────────────────────────────────────────────────────────────────
+function startPlay() {
+  if (playTimer) return;
+  $('play-btn').textContent = '⏸';
+  playTimer = setInterval(() => {
+    if (step >= trace.length - 1) { stopPlay(); return; }
+    renderStep(step + 1);
+  }, 550);
+}
+function stopPlay() {
+  clearInterval(playTimer);
+  playTimer = null;
+  const btn = $('play-btn');
+  if (btn) btn.textContent = '▶';
+}
+function togglePlay() { playTimer ? stopPlay() : startPlay(); }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function $(id)           { return document.getElementById(id); }
+function show(id)        { $(id).classList.remove('hidden'); }
+function hide(id)        { $(id).classList.add('hidden'); }
+function el(tag, cls)    { const d = document.createElement(tag); if (cls) d.className = cls; return d; }
+function esc(s)          {
+  if (s == null) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Event listeners ───────────────────────────────────────────────────────────
+$('viz-btn').addEventListener('click', runViz);
+
+$('next-btn').addEventListener('click', () => { stopPlay(); renderStep(step + 1); });
+$('prev-btn').addEventListener('click', () => { stopPlay(); renderStep(step - 1); });
+$('play-btn').addEventListener('click', togglePlay);
+
+$('edit-btn').addEventListener('click', () => {
+  stopPlay();
+  hide('viz-layout');
+  show('edit-panel');
+  trace = []; step = 0;
+});
+
+$('load-example-btn').addEventListener('click', () => {
+  $('code-input').value = EXAMPLE.trim();
+});
+
+// Keyboard shortcuts (arrow keys / space when in viz mode)
+document.addEventListener('keydown', e => {
+  if (!$('viz-layout').classList.contains('hidden') && document.activeElement.tagName !== 'TEXTAREA') {
+    if (e.key === 'ArrowRight' || e.key === 'n') { stopPlay(); renderStep(step + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'p') { stopPlay(); renderStep(step - 1); }
+    else if (e.key === ' ') { e.preventDefault(); togglePlay(); }
+  }
+});
+
+// Redraw arrows when memory panel scrolls
+$('memory-inner').addEventListener('scroll', drawArrows);
+window.addEventListener('resize', drawArrows);
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+initPy();
+</script>
+</body>
+</html>
