@@ -146,6 +146,18 @@
     #exec-scroll > *:last-child { margin-bottom: 0; }
 
     /* ── Scope frame (function vars) ── */
+    .result-card {
+      background: #f0fdf4; border: 2.5px solid #16a34a; border-radius: 8px; overflow: hidden;
+    }
+    .result-card-header {
+      background: #16a34a; color: white; padding: 4px 10px;
+      font-size: 0.78rem; font-weight: 900; display: flex; align-items: center; gap: 6px;
+    }
+    .result-card-body {
+      padding: 8px 10px; font-family: 'JetBrains Mono', Consolas, monospace;
+      font-size: 0.82rem; white-space: pre-wrap; word-break: break-all; color: #15803d;
+    }
+
     .scope-frame {
       background: white; border: 2.5px solid black; border-radius: 8px; overflow: hidden;
     }

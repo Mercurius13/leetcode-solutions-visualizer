@@ -2,6 +2,7 @@
 let pyodide       = null;
 let trace         = [];
 let step          = 0;
+let finalOutput   = '';   // stdout + return value from the completed run
 let playTimer     = null;
 let userLineCount = 0;
 let blockStructure   = null;  // { blocks, lineToBlocks }
@@ -719,6 +720,18 @@ function renderContext(stepIdx) {
 
   const scroll = $('exec-scroll');
   scroll.innerHTML = '';
+
+  // ── 0. Result card — shown only on the last step, above everything else
+  if (stepIdx === trace.length - 1 && finalOutput) {
+    const card = el('div', 'result-card');
+    const hdr  = el('div', 'result-card-header');
+    hdr.innerHTML = '<span>◎</span><span>Result</span>';
+    card.appendChild(hdr);
+    const body = el('div', 'result-card-body');
+    body.textContent = finalOutput;
+    card.appendChild(body);
+    scroll.appendChild(card);
+  }
 
   // ── func label in header
   const fl = $('exec-func-label');
@@ -2564,6 +2577,7 @@ async function runViz() {
     const raw = await pyodide.runPythonAsync(TRACER);
     const result = JSON.parse(raw);
 
+    finalOutput = (result.out || '').trim();
     if (result.error && !result.trace?.length) { alert('Python error:\n' + result.error); return; }
     // Even with a partial trace, always surface the error so the user knows execution failed
     if (result.error && result.trace?.length) {
