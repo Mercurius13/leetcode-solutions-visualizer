@@ -1,3 +1,6 @@
+# Scripts not needed in production
+scripts/populate_problems.py
+
 # Python
 venv/
 __pycache__/
