@@ -6,9 +6,11 @@ Endpoints:
   GET  /problems?page=N    → 100 problem metadata rows (for frontend page cache)
   GET  /problems/{num}     → full problem: description, starter, solution, tags
 
-Run:
-    pip install -r requirements.txt
+Local:
     uvicorn server:app --reload --port 5050
+
+Production (Render picks up $PORT automatically):
+    uvicorn server:app --host 0.0.0.0 --port $PORT
 """
 
 import sqlite3
@@ -16,9 +18,11 @@ import json
 import os
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 DB_PATH   = os.environ.get("VIZ_DB", os.path.join(os.path.dirname(__file__), "problems.db"))
 PAGE_SIZE = 100
+HERE      = os.path.dirname(os.path.abspath(__file__))
 
 app = FastAPI(title="Code Visualizer API")
 
@@ -35,6 +39,8 @@ def get_db():
     conn.row_factory = sqlite3.Row
     return conn
 
+
+# ── API routes (must be registered BEFORE the static-file catch-all) ──────────
 
 @app.get("/problems")
 def list_problems(page: int = Query(0, ge=0)):
@@ -65,3 +71,7 @@ def get_problem(num: str):
     except Exception:
         data["tags"] = []
     return data
+
+
+# ── Serve frontend as static files (catch-all, must come last) ────────────────
+app.mount("/", StaticFiles(directory=HERE, html=True), name="static")

@@ -2720,8 +2720,11 @@ function truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '…' : s; 
 // ══════════════════════════════════════════════════════════════════════════════
 // LEETCODE PROBLEM FETCHER
 // ══════════════════════════════════════════════════════════════════════════════
-const LC_API      = 'https://alfa-leetcode-api.onrender.com'; // fallback only
-const VIZ_API     = 'http://localhost:5050';                  // standalone visualizer server
+const LC_API  = 'https://alfa-leetcode-api.onrender.com';
+// Same origin in production; local server in development
+const VIZ_API = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? 'http://localhost:5050'
+  : '';
 
 // ── Page-based problem cache ──────────────────────────────────────────────────
 // Problems are fetched in pages of 100, keyed by page index.
